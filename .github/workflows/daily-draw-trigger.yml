@@ -1,0 +1,83 @@
+name: Daily Lottery Draw Trigger
+
+on:
+  schedule:
+    # Primary trigger: 20:00 UTC every day (12:00 AM GMT+4)
+    - cron: '0 20 * * *'
+    # Backup triggers: Every 30 minutes from 20:30 to 22:00 UTC (in case VRF is delayed)
+    - cron: '30 20 * * *'  # 20:30 UTC
+    - cron: '0 21 * * *'   # 21:00 UTC
+    - cron: '30 21 * * *'  # 21:30 UTC
+    - cron: '0 22 * * *'   # 22:00 UTC
+  workflow_dispatch: # Allows manual triggering for testing
+
+jobs:
+  trigger-draw:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Continuous Draw Detection and Processing
+      run: |
+        echo "🎯 Starting continuous draw detection at $(date)"
+        
+        # Get the current round first
+        CURRENT_ROUND=$(curl -s -f "https://${{ secrets.REPLIT_URL }}/api/current-round" | jq -r '.round' || echo "unknown")
+        echo "📊 Starting round: $CURRENT_ROUND"
+        
+        # Maximum attempts: 30 minutes (60 checks every 30 seconds)
+        MAX_ATTEMPTS=60
+        ATTEMPT=1
+        DRAW_PROCESSED=false
+        
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$DRAW_PROCESSED" = false ]; do
+          echo "🔍 Attempt $ATTEMPT/$MAX_ATTEMPTS - Checking for draw completion..."
+          
+          # Trigger the automated draw detection
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            "https://${{ secrets.REPLIT_URL }}/api/automated-draw-trigger" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DRAW_TRIGGER_SECRET }}" \
+            -d '{"source": "github-actions", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'", "attempt": '$ATTEMPT'}')
+          
+          HTTP_CODE="${RESPONSE: -3}"
+          BODY="${RESPONSE%???}"
+          
+          echo "📡 Response code: $HTTP_CODE"
+          echo "📡 Response body: $BODY"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            # Check if the response indicates success
+            if echo "$BODY" | jq -e '.success == true' > /dev/null 2>&1; then
+              echo "✅ Draw successfully detected and processed!"
+              DRAW_PROCESSED=true
+              
+              # Verify round advancement
+              NEW_ROUND=$(curl -s -f "https://${{ secrets.REPLIT_URL }}/api/current-round" | jq -r '.round' || echo "unknown")
+              echo "📊 Round advanced from $CURRENT_ROUND to $NEW_ROUND"
+              break
+            else
+              # Draw not ready yet, extract the message
+              MESSAGE=$(echo "$BODY" | jq -r '.message' 2>/dev/null || echo "No message")
+              echo "⏳ Draw not ready: $MESSAGE"
+            fi
+          else
+            echo "❌ Request failed with code $HTTP_CODE"
+          fi
+          
+          # Wait 30 seconds before next attempt (unless it's the last attempt)
+          if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+            echo "⏳ Waiting 30 seconds before next check..."
+            sleep 30
+          fi
+          
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+        
+        # Final status check
+        if [ "$DRAW_PROCESSED" = true ]; then
+          echo "🎉 SUCCESS: Draw was detected and processed successfully!"
+        else
+          echo "⚠️ TIMEOUT: Draw was not detected within 30 minutes"
+          echo "💡 This may be normal if Chainlink VRF is experiencing delays"
+          echo "🔄 The system will retry tomorrow at the same time"
+        fi
