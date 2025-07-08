@@ -2,13 +2,8 @@ name: Daily Lottery Draw Trigger
 
 on:
   schedule:
-    # Primary trigger: 20:00 UTC every day (12:00 AM GMT+4)
-    - cron: '0 20 * * *'
-    # Backup triggers: Every 30 minutes from 20:30 to 22:00 UTC (in case VRF is delayed)
-    - cron: '30 20 * * *'  # 20:30 UTC
-    - cron: '0 21 * * *'   # 21:00 UTC
-    - cron: '30 21 * * *'  # 21:30 UTC
-    - cron: '0 22 * * *'   # 22:00 UTC
+    # TEST: Trigger every 5 minutes starting now for immediate testing
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allows manual triggering for testing
 
 jobs:
@@ -21,8 +16,19 @@ jobs:
         echo "🎯 Starting continuous draw detection at $(date)"
         
         # Get the current round first
-        CURRENT_ROUND=$(curl -s -f "https://${{ secrets.REPLIT_URL }}/api/current-round" | jq -r '.round' || echo "unknown")
+        echo "🔗 Connecting to: https://${{ secrets.REPLIT_URL }}"
+        ROUND_RESPONSE=$(curl -s "https://${{ secrets.REPLIT_URL }}/api/current-round" || echo '{"error":"connection_failed"}')
+        echo "📡 Round API response: $ROUND_RESPONSE"
+        
+        CURRENT_ROUND=$(echo "$ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
         echo "📊 Starting round: $CURRENT_ROUND"
+        
+        # Check if we can connect to the app
+        if [ "$CURRENT_ROUND" = "unknown" ]; then
+          echo "❌ Failed to connect to Replit app. Check REPLIT_URL secret."
+          echo "💡 Make sure your Replit app is running and accessible."
+          exit 1
+        fi
         
         # Maximum attempts: 30 minutes (60 checks every 30 seconds)
         MAX_ATTEMPTS=60
@@ -37,10 +43,17 @@ jobs:
             "https://${{ secrets.REPLIT_URL }}/api/automated-draw-trigger" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.DRAW_TRIGGER_SECRET }}" \
-            -d '{"source": "github-actions", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'", "attempt": '$ATTEMPT'}')
+            -d '{"source": "github-actions", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'", "attempt": '$ATTEMPT'}' \
+            || echo "000")
           
-          HTTP_CODE="${RESPONSE: -3}"
-          BODY="${RESPONSE%???}"
+          # Extract HTTP code and body more safely
+          if [ ${#RESPONSE} -ge 3 ]; then
+            HTTP_CODE="${RESPONSE: -3}"
+            BODY="${RESPONSE%???}"
+          else
+            HTTP_CODE="000"
+            BODY="Connection failed"
+          fi
           
           echo "📡 Response code: $HTTP_CODE"
           echo "📡 Response body: $BODY"
@@ -52,7 +65,8 @@ jobs:
               DRAW_PROCESSED=true
               
               # Verify round advancement
-              NEW_ROUND=$(curl -s -f "https://${{ secrets.REPLIT_URL }}/api/current-round" | jq -r '.round' || echo "unknown")
+              NEW_ROUND_RESPONSE=$(curl -s "https://${{ secrets.REPLIT_URL }}/api/current-round" || echo '{"round":"unknown"}')
+              NEW_ROUND=$(echo "$NEW_ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
               echo "📊 Round advanced from $CURRENT_ROUND to $NEW_ROUND"
               break
             else
