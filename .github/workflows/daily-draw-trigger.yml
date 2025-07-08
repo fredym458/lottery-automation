@@ -1,9 +1,8 @@
 name: Daily Lottery Draw Trigger
 
 on:
-  schedule:
-    # TEST: Trigger every 10 minutes for testing
-    - cron: '*/10 * * * *'
+  push:
+    branches: [ main, master ]
   workflow_dispatch: # Allows manual triggering for testing
 
 jobs:
