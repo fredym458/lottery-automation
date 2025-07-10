@@ -4,7 +4,6 @@ on:
   schedule:
     # Daily draw at 12:00 AM GMT+4 (20:00 UTC)
     - cron: '30 19 * * *'
-
   workflow_dispatch: # Allows manual triggering for testing
 
 jobs:
