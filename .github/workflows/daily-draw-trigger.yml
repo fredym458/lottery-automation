@@ -14,6 +14,8 @@ jobs:
     - name: Continuous Draw Detection and Processing
       run: |
         echo "🎯 Starting continuous draw detection at $(date)"
+        echo "🔧 Contract: 0x821E13f7AB798c5Cb64e3b758314eCfAE4527788 (BSC Testnet)"
+        echo "🎮 Expected starting round: 8 (after comprehensive testing)"
         
         # Get the current round first
         echo "🔗 Connecting to: https://${{ secrets.REPLIT_URL }}"
@@ -90,8 +92,11 @@ jobs:
         # Final status check
         if [ "$DRAW_PROCESSED" = true ]; then
           echo "🎉 SUCCESS: Draw was detected and processed successfully!"
+          echo "🎯 Contract: 0x821E13f7AB798c5Cb64e3b758314eCfAE4527788"
+          echo "📊 Round advancement confirmed"
         else
           echo "⚠️ TIMEOUT: Draw was not detected within 30 minutes"
           echo "💡 This may be normal if Chainlink VRF is experiencing delays"
           echo "🔄 The system will retry tomorrow at the same time"
+          echo "📋 Current round: $CURRENT_ROUND"
         fi
