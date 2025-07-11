@@ -2,7 +2,7 @@ name: Daily Lottery Draw Trigger
 
 on:
   schedule:
-    # Daily draw at 12:00 AM GMT+4 (20:00 UTC)
+    # Daily draw at 11:30 PM GMT+4 (19:30 UTC) - start 30 minutes BEFORE VRF completion at 20:00 UTC
     - cron: '30 19 * * *'
   workflow_dispatch: # Allows manual triggering for testing
 
@@ -15,7 +15,9 @@ jobs:
       run: |
         echo "🎯 Starting continuous draw detection at $(date)"
         echo "🔧 Contract: 0x821E13f7AB798c5Cb64e3b758314eCfAE4527788 (BSC Testnet)"
-        echo "🎮 Expected starting round: 8 (after comprehensive testing)"
+        echo "🎮 Production lottery system - early start to catch VRF completion within 1-hour deadline"
+        echo "⏰ Expected VRF completion: 12:00 AM GMT+4 (20:00 UTC)"
+        echo "⚠️ CRITICAL: Winners must be submitted within 1 hour of VRF completion!"
         
         # Get the current round first
         echo "🔗 Connecting to: https://${{ secrets.REPLIT_URL }}"
@@ -32,8 +34,9 @@ jobs:
           exit 1
         fi
         
-        # Maximum attempts: 30 minutes (60 checks every 30 seconds)
-        MAX_ATTEMPTS=60
+        # Maximum attempts: 90 minutes (180 checks every 30 seconds) to detect VRF completion and process within deadline  
+        # Start at 19:30 UTC, detect VRF at 20:00 UTC, deadline at 21:00 UTC
+        MAX_ATTEMPTS=180
         ATTEMPT=1
         DRAW_PROCESSED=false
         
