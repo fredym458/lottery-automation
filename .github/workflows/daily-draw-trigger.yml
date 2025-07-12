@@ -19,18 +19,18 @@ jobs:
         echo "⏰ Expected VRF completion: 12:00 AM GMT+4 (20:00 UTC)"
         echo "⚠️ CRITICAL: Winners must be submitted within 1 hour of VRF completion!"
         
-        # WAKE UP REPLIT SERVER - Multiple attempts to ensure hibernated server starts
-        echo "🔗 Connecting to: https://${{ secrets.REPLIT_URL }}"
+        # WAKE UP REPLIT SERVER - Multiple attempts to ensure hibernated server starts  
+        echo "🔗 Connecting to: https://luckychainlottery.io"
         echo "⚡ Waking up Replit server (may be hibernated)..."
         
         # Step 1: Wake up with frontend request (30 second timeout for cold start)
         echo "🌐 Step 1: Waking up frontend..."
-        curl -m 30 -s "https://${{ secrets.REPLIT_URL }}/" > /dev/null || echo "Frontend wake attempt completed"
+        curl -m 30 -s "https://luckychainlottery.io/" > /dev/null || echo "Frontend wake attempt completed"
         sleep 5
         
         # Step 2: Wake up backend with health check (30 second timeout)
         echo "⚙️ Step 2: Waking up backend..."
-        curl -m 30 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" > /dev/null || echo "Backend wake attempt completed"
+        curl -m 30 -s "https://luckychainlottery.io/api/current-round" > /dev/null || echo "Backend wake attempt completed"
         sleep 5
         
         # Step 3: Verify server is fully awake
@@ -39,7 +39,7 @@ jobs:
         MAX_WAKE_ATTEMPTS=6
         
         while [ $WAKE_ATTEMPTS -lt $MAX_WAKE_ATTEMPTS ]; do
-          ROUND_RESPONSE=$(curl -m 15 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" 2>/dev/null || echo '{"error":"connection_failed"}')
+          ROUND_RESPONSE=$(curl -m 15 -s "https://luckychainlottery.io/api/current-round" 2>/dev/null || echo '{"error":"connection_failed"}')
           CURRENT_ROUND=$(echo "$ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
           
           if [ "$CURRENT_ROUND" != "unknown" ]; then
@@ -71,7 +71,7 @@ jobs:
           
           # Trigger the automated draw detection
           RESPONSE=$(curl -s -w "%{http_code}" -X POST \
-            "https://${{ secrets.REPLIT_URL }}/api/automated-draw-trigger" \
+            "https://luckychainlottery.io/api/automated-draw-trigger" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.DRAW_TRIGGER_SECRET }}" \
             -d '{"source": "github-actions", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'", "attempt": '$ATTEMPT'}' \
@@ -96,7 +96,7 @@ jobs:
               DRAW_PROCESSED=true
               
               # Verify round advancement
-              NEW_ROUND_RESPONSE=$(curl -s "https://${{ secrets.REPLIT_URL }}/api/current-round" || echo '{"round":"unknown"}')
+              NEW_ROUND_RESPONSE=$(curl -s "https://luckychainlottery.io/api/current-round" || echo '{"round":"unknown"}')
               NEW_ROUND=$(echo "$NEW_ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
               echo "📊 Round advanced from $CURRENT_ROUND to $NEW_ROUND"
               break
@@ -116,7 +116,7 @@ jobs:
             # Keep-alive ping every 5 attempts to prevent re-hibernation
             if [ $((ATTEMPT % 5)) -eq 0 ]; then
               echo "📡 Keep-alive ping to prevent hibernation..."
-              curl -m 10 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" > /dev/null || echo "Keep-alive completed"
+              curl -m 10 -s "https://luckychainlottery.io/api/current-round" > /dev/null || echo "Keep-alive completed"
             fi
             
             sleep 30
