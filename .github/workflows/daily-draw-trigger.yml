@@ -19,18 +19,44 @@ jobs:
         echo "⏰ Expected VRF completion: 12:00 AM GMT+4 (20:00 UTC)"
         echo "⚠️ CRITICAL: Winners must be submitted within 1 hour of VRF completion!"
         
-        # Get the current round first
+        # WAKE UP REPLIT SERVER - Multiple attempts to ensure hibernated server starts
         echo "🔗 Connecting to: https://${{ secrets.REPLIT_URL }}"
-        ROUND_RESPONSE=$(curl -s "https://${{ secrets.REPLIT_URL }}/api/current-round" || echo '{"error":"connection_failed"}')
-        echo "📡 Round API response: $ROUND_RESPONSE"
+        echo "⚡ Waking up Replit server (may be hibernated)..."
         
-        CURRENT_ROUND=$(echo "$ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
-        echo "📊 Starting round: $CURRENT_ROUND"
+        # Step 1: Wake up with frontend request (30 second timeout for cold start)
+        echo "🌐 Step 1: Waking up frontend..."
+        curl -m 30 -s "https://${{ secrets.REPLIT_URL }}/" > /dev/null || echo "Frontend wake attempt completed"
+        sleep 5
         
-        # Check if we can connect to the app
+        # Step 2: Wake up backend with health check (30 second timeout)
+        echo "⚙️ Step 2: Waking up backend..."
+        curl -m 30 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" > /dev/null || echo "Backend wake attempt completed"
+        sleep 5
+        
+        # Step 3: Verify server is fully awake
+        echo "🔍 Step 3: Verifying server is responsive..."
+        WAKE_ATTEMPTS=0
+        MAX_WAKE_ATTEMPTS=6
+        
+        while [ $WAKE_ATTEMPTS -lt $MAX_WAKE_ATTEMPTS ]; do
+          ROUND_RESPONSE=$(curl -m 15 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" 2>/dev/null || echo '{"error":"connection_failed"}')
+          CURRENT_ROUND=$(echo "$ROUND_RESPONSE" | jq -r '.round // "unknown"' 2>/dev/null || echo "unknown")
+          
+          if [ "$CURRENT_ROUND" != "unknown" ]; then
+            echo "✅ Server is awake and responsive!"
+            echo "📊 Starting round: $CURRENT_ROUND"
+            break
+          fi
+          
+          WAKE_ATTEMPTS=$((WAKE_ATTEMPTS + 1))
+          echo "⏳ Wake attempt $WAKE_ATTEMPTS/$MAX_WAKE_ATTEMPTS - waiting 10 seconds..."
+          sleep 10
+        done
+        
+        # Final check - exit if server never woke up
         if [ "$CURRENT_ROUND" = "unknown" ]; then
-          echo "❌ Failed to connect to Replit app. Check REPLIT_URL secret."
-          echo "💡 Make sure your Replit app is running and accessible."
+          echo "❌ Failed to wake up Replit server after $MAX_WAKE_ATTEMPTS attempts"
+          echo "💡 Server may be experiencing issues. Check Replit console."
           exit 1
         fi
         
@@ -86,6 +112,13 @@ jobs:
           # Wait 30 seconds before next attempt (unless it's the last attempt)
           if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
             echo "⏳ Waiting 30 seconds before next check..."
+            
+            # Keep-alive ping every 5 attempts to prevent re-hibernation
+            if [ $((ATTEMPT % 5)) -eq 0 ]; then
+              echo "📡 Keep-alive ping to prevent hibernation..."
+              curl -m 10 -s "https://${{ secrets.REPLIT_URL }}/api/current-round" > /dev/null || echo "Keep-alive completed"
+            fi
+            
             sleep 30
           fi
           
